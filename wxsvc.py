@@ -10,4 +10,5 @@ def root():
 @app.route('/t', methods=['POST'])
 def svc():
   data = dict()
+  print(request.data)
   return json.dump(data)

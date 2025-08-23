@@ -6,5 +6,118 @@
   <title>wxsvc</title>
 </head>
 <body>
+  <!-- <form action="" method="post"></form> -->
+  <input id="bStart" type="button" value="start">
+  <input id="bStop" type="button" value="stop">
+  <input id="bStartContinuous" type="button" value="start (continuous)">
+
+  <script defer>
+
+const states = {};
+const bitRate = 128000;
+// const aLenDurMax = 10;
+// const aLenDurPad = 1;
+// const aLenBuf = bitRate * (aLenDurMax + aLenDurPad + aLenDurPad);
+const aOptions = {
+  audioBitsPerSecond: bitRate,
+  mimeType: "audio/wav"
+};
+let aPtr = 0;
+let aOff = 0;
+let aCtx = null;
+let aSrc = null;
+let aAnalyzer = null;
+let aRecorder = null;
+let aAnalyzerBuffer = null;
+let aBuf = [];
+let aBufPad = [null, null, null];
+
+const elBtnStart = document.getElementById('bStart');
+const elBtnStartCont = document.getElementById('bStartContinuous');
+const elBtnStop = document.getElementById('bStop');
+
+states.running = 0;
+states.running_cont = 0;
+
+function aRecClearBuf () {
+  aBuf = [];
+}
+
+function aRecStart () {
+  if (aRecorder.state !== 'recording') {
+    aCtx.resume();
+    aRecorder.start(1000)
+    console.log(aRecorder.state);
+  } else {
+    console.log('MediaRecorder is already active');
+  }
+}
+
+function aRecStop () {
+  if (aRecorder.state !== 'inactive') {
+    aCtx.suspend();
+    aRecorder.stop();
+    console.log(aRecorder.state);
+  }
+}
+
+function aRecBufCtlOnStop () {
+  console.log(aBuf);
+  if (aRecorder.state !== 'inactive') return;
+  console.log(aRecorder.mimeType)
+  aRecClearBuf();
+}
+
+function aAppProcInit() {
+  navigator.mediaDevices.getUserMedia({audio: true})
+  .then((stream)=>{
+    aCtx = new (window.AudioContext || window.webkitAudioContext)();
+    aSrc = aCtx.createMediaStreamSource(stream);
+    aRecorder = new MediaRecorder(stream);
+    aRecorder.ondataavailable = (e)=>{
+      aBuf.push(e.data);
+      aRecBufCtlOnStop();
+    };
+    aAnalyzer = aCtx.createAnalyser();
+    aSrc.connect(aAnalyzer);
+    aAnalyzer.fftSize = 4096;
+    aAnalyzer.smoothingTimeConstant = .2;
+    aAnalyzerBuffer = new Uint8Array(aAnalyzer.frequencyBinCount);
+    aCtx.suspend();
+  })
+  .catch((err)=>{
+    aAppProcDestroy();
+    console.error(err)
+  })
+};
+
+function aAppProcDestroy() {
+  if (aCtx !== null && aCtx.state !== "closed") {
+    aCtx.close().then(() => {
+      aCtx = null;
+    })
+  };
+  aSrc = null;
+  aAnalyzer = null;
+  aAnalyzerBuffer = null;
+};
+
+
+window.onbeforeunload = (event) => {
+  aAppProcDestroy();
+};
+
+
+elBtnStart.addEventListener('click', ()=>{
+  aRecStart()
+});
+
+elBtnStop.addEventListener('click', ()=>{
+  aRecStop()
+});
+
+aAppProcInit();
+
+  </script>
 </body>
 </html>
