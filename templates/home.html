@@ -7,9 +7,7 @@
 </head>
 <body>
   <!-- <form action="" method="post"></form> -->
-  <input id="bStart" type="button" value="start">
-  <input id="bStop" type="button" value="stop">
-  <input id="bStartContinuous" type="button" value="start (continuous)">
+  <input id="bToggle" type="button" value="start">
 
   <script defer>
 
@@ -27,12 +25,9 @@ let aAnalyzerBuffer = null;
 let aBuf = [];
 let aBufPad = [null, null, null];
 
-const elBtnStart = document.getElementById('bStart');
-const elBtnStartCont = document.getElementById('bStartContinuous');
-const elBtnStop = document.getElementById('bStop');
+const elBtnToggle = document.getElementById('bToggle');
 
 states.running = 0;
-states.running_cont = 0;
 
 function aRecClearBuf () {
   aBuf = [];
@@ -47,6 +42,7 @@ function aRecStart () {
     aCtx.resume();
     aRecorder.start(1000)
     console.log(aRecorder.state);
+    states.running = 1;
   } else {
     console.log('MediaRecorder is already active');
   }
@@ -57,6 +53,7 @@ function aRecStop () {
     aCtx.suspend();
     aRecorder.stop();
     console.log(aRecorder.state);
+    states.running = 0;
   }
 }
 
@@ -76,15 +73,15 @@ async function aAppProcTrans () {
   const port = window.location.port;
   const payload = aRecCreateBlob();
   const formData = new FormData()
-  formData.append('file', payload, 'a')
+  formData.append('file', payload, 'file')
   try {
     const resp = await fetch(`http://${host}:${port}/api/trans/a`, {
         method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-        },
-        enctype:"multipart/form-data",
+        // headers: {
+        //   Accept: 'application/json',
+        //   'Content-Type': 'application/json',
+        // },
+        // enctype:"multipart/form-data",
         body: formData
       }
     );
@@ -137,13 +134,16 @@ window.onbeforeunload = (event) => {
 };
 
 
-elBtnStart.addEventListener('click', ()=>{
-  aRecStart()
+elBtnToggle.addEventListener('click', ()=>{
+  if (states.running === 0) {
+    aRecStart()
+    elBtnToggle.value = 'stop'
+  } else {
+    aRecStop()
+    elBtnToggle.value = 'start'
+  }
 });
 
-elBtnStop.addEventListener('click', ()=>{
-  aRecStop()
-});
 
 aAppProcInit();
 
