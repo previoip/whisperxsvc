@@ -15,15 +15,10 @@
 
 const states = {};
 const bitRate = 128000;
-// const aLenDurMax = 10;
-// const aLenDurPad = 1;
-// const aLenBuf = bitRate * (aLenDurMax + aLenDurPad + aLenDurPad);
 const aOptions = {
   audioBitsPerSecond: bitRate,
-  mimeType: "audio/wav"
+  mimeType: "audio/ogg"
 };
-let aPtr = 0;
-let aOff = 0;
 let aCtx = null;
 let aSrc = null;
 let aAnalyzer = null;
@@ -41,6 +36,10 @@ states.running_cont = 0;
 
 function aRecClearBuf () {
   aBuf = [];
+}
+
+function aRecCreateBlob () {
+  return new Blob(aBuf, {type: aRecorder.mimeType})
 }
 
 function aRecStart () {
@@ -64,16 +63,46 @@ function aRecStop () {
 function aRecBufCtlOnStop () {
   console.log(aBuf);
   if (aRecorder.state !== 'inactive') return;
-  console.log(aRecorder.mimeType)
-  aRecClearBuf();
+  const procTranscribe = aAppProcTrans();
+  procTranscribe.then((data)=>{
+    console.log(data)
+  }).then(()=>{
+    aRecClearBuf();
+  })
 }
+
+async function aAppProcTrans () {
+  const host = window.location.hostname;
+  const port = window.location.port;
+  const payload = aRecCreateBlob();
+  const formData = new FormData()
+  formData.append('file', payload, 'a')
+  try {
+    const resp = await fetch(`http://${host}:${port}/api/trans/a`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        enctype:"multipart/form-data",
+        body: formData
+      }
+    );
+    const retv = await resp.json();
+    return retv
+  } catch (err) {
+    console.error(err)
+    return {}
+  }
+}
+
 
 function aAppProcInit() {
   navigator.mediaDevices.getUserMedia({audio: true})
   .then((stream)=>{
     aCtx = new (window.AudioContext || window.webkitAudioContext)();
     aSrc = aCtx.createMediaStreamSource(stream);
-    aRecorder = new MediaRecorder(stream);
+    aRecorder = new MediaRecorder(stream, aOptions);
     aRecorder.ondataavailable = (e)=>{
       aBuf.push(e.data);
       aRecBufCtlOnStop();
@@ -117,6 +146,7 @@ elBtnStop.addEventListener('click', ()=>{
 });
 
 aAppProcInit();
+
 
   </script>
 </body>

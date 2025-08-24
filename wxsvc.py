@@ -2,13 +2,22 @@ import json
 from flask import Flask, request, render_template
 
 app = Flask(__name__)
+rc = 0
+
+def incr(d):
+  global rc
+  rc += 1
+  d['rc'] = rc
+
 
 @app.route('/')
 def root():
   return render_template('./home.html')
 
-@app.route('/t', methods=['POST'])
+@app.route('/api/trans/a', methods=['POST'])
 def svc():
   data = dict()
-  print(request.data)
-  return json.dump(data)
+  incr(data)
+  print(request.files)
+  print(request)
+  return json.dumps(data)
