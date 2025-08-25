@@ -4,10 +4,35 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>wxsvc</title>
+  <style>
+    table tbody tr {
+      padding: 0 .4em;
+      border: 1px solid black;
+    }
+  </style>
 </head>
 <body>
-  <!-- <form action="" method="post"></form> -->
   <input id="bToggle" type="button" value="start">
+  <table id="tbTrans" style="width: 100%;">
+    <colgroup>
+      <col span="1" style="width: 10%;">
+      <col span="1" style="width: 5%;">
+      <col span="1" style="width: 85%;">
+    </colgroup>
+    <thead>
+      <tr>
+        <th scope="col">ts</th>
+        <th scope="col">lang</th>
+        <th scope="col">text</th>
+      </tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+
+  <!-- <div id="trans" style="display:flex;flex-direction:column;width:100%;">
+  </div> -->
+
 
   <script defer>
 
@@ -23,55 +48,73 @@ let aAnalyzer = null;
 let aRecorder = null;
 let aAnalyzerBuffer = null;
 let aBuf = [];
-let aBufPad = [null, null, null];
+let aRecorderTimeout = null;
 
 const elBtnToggle = document.getElementById('bToggle');
+const elTrascripts = document.getElementById('tbTrans').getElementsByTagName("tbody")[0];
 
 states.running = 0;
 
-function aRecClearBuf () {
+
+function wxcClearBuf () {
   aBuf = [];
-}
+};
 
-function aRecCreateBlob () {
+
+function wxcDumpBlob() {
   return new Blob(aBuf, {type: aRecorder.mimeType})
-}
+};
 
-function aRecStart () {
+
+function wxcRecStartHandler() {
   if (aRecorder.state !== 'recording') {
     aCtx.resume();
     aRecorder.start(1000)
     console.log(aRecorder.state);
     states.running = 1;
+    elBtnToggle.value = 'stop'
   } else {
     console.log('MediaRecorder is already active');
   }
+};
+
+
+function wxcRecStart() {
+  wxcRecStartHandler()
 }
 
-function aRecStop () {
+
+function wxcRecStopHandler() {
+  if (aRecorderTimeout) {
+    clearTimeout(aRecorderTimeout)
+  }
   if (aRecorder.state !== 'inactive') {
-    aCtx.suspend();
     aRecorder.stop();
+    aCtx.suspend();
     console.log(aRecorder.state);
     states.running = 0;
+    elBtnToggle.value = 'start'
   }
-}
+};
 
-function aRecBufCtlOnStop () {
-  console.log(aBuf);
+
+function wxcRecStop() {
+  wxcRecStopHandler()
+};
+
+
+function wxcTranscribeHandler() {
   if (aRecorder.state !== 'inactive') return;
-  const procTranscribe = aAppProcTrans();
-  procTranscribe.then((data)=>{
-    console.log(data)
-  }).then(()=>{
-    aRecClearBuf();
-  })
-}
+  wxcProcTransmitAndTranscribe()
+  .then(wxcRender)
+  .then(wxcClearBuf)
+};
 
-async function aAppProcTrans () {
+
+async function wxcProcTransmitAndTranscribe() {
   const host = window.location.hostname;
   const port = window.location.port;
-  const payload = aRecCreateBlob();
+  const payload = wxcDumpBlob();
   const formData = new FormData()
   formData.append('file', payload, 'file')
   try {
@@ -94,7 +137,28 @@ async function aAppProcTrans () {
 }
 
 
-function aAppProcInit() {
+function wxcRender(data) {
+  const ts = data['ts'] * 1000
+  data['trans'].forEach(trans => {
+    trans['segments'].forEach(seg => {
+      let dtime = new Date((seg.start*1000) + ts)
+      let dur = seg.end - seg.start;
+      let row = elTrascripts.insertRow(0)
+      let cell0 = row.insertCell(0);
+      let cell1 = row.insertCell(1);
+      let cell2 = row.insertCell(2);
+      let txnd0 = document.createTextNode(`${dtime.toLocaleString()}`);
+      let txnd1 = document.createTextNode(trans['language']);
+      let txnd2 = document.createTextNode(seg['text']);
+      cell0.appendChild(txnd0);
+      cell1.appendChild(txnd1);
+      cell2.appendChild(txnd2);
+    })
+  });
+}
+
+
+function wxcInit() {
   navigator.mediaDevices.getUserMedia({audio: true})
   .then((stream)=>{
     aCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -102,22 +166,22 @@ function aAppProcInit() {
     aRecorder = new MediaRecorder(stream, aOptions);
     aRecorder.ondataavailable = (e)=>{
       aBuf.push(e.data);
-      aRecBufCtlOnStop();
+      wxcTranscribeHandler();
     };
     aAnalyzer = aCtx.createAnalyser();
     aSrc.connect(aAnalyzer);
-    aAnalyzer.fftSize = 4096;
+    aAnalyzer.fftSize = 2048;
     aAnalyzer.smoothingTimeConstant = .2;
     aAnalyzerBuffer = new Uint8Array(aAnalyzer.frequencyBinCount);
     aCtx.suspend();
   })
   .catch((err)=>{
-    aAppProcDestroy();
+    wxcDestroy();
     console.error(err)
   })
 };
 
-function aAppProcDestroy() {
+function wxcDestroy() {
   if (aCtx !== null && aCtx.state !== "closed") {
     aCtx.close().then(() => {
       aCtx = null;
@@ -130,22 +194,20 @@ function aAppProcDestroy() {
 
 
 window.onbeforeunload = (event) => {
-  aAppProcDestroy();
+  wxcDestroy();
 };
 
 
 elBtnToggle.addEventListener('click', ()=>{
   if (states.running === 0) {
-    aRecStart()
-    elBtnToggle.value = 'stop'
+    wxcRecStart()
   } else {
-    aRecStop()
-    elBtnToggle.value = 'start'
+    wxcRecStop()
   }
 });
 
 
-aAppProcInit();
+wxcInit();
 
 
   </script>
