@@ -49,7 +49,13 @@ def svc():
     logger.error('file is null')
     return {}
   fd, path = mkstemp(dir=CACHE_DIR)
-  with open(fd, 'wb') as fp: fp.write(file.read())
+  with open(fd, 'wb') as fp:
+    b = file.read()
+    if len(b) == 0:
+      logger.warning('lmfao blob contains no data try again')
+      svc_lock.release()
+      return resp
+    fp.write(b)
   try:
     audio = load_audio(path)
     rm(path)

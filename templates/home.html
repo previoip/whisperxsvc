@@ -32,7 +32,7 @@
 const RECORD_WINDOW = 5000;
 const MEDIARECORDER_OPTIONS = {
   audioBitsPerSecond: 128000,
-  mimeType: "audio/ogg;codecs=opus"
+  // mimeType: "audio/ogg;codecs=vorbis" opus
 };
 
 const elBtnToggle = document.getElementById('bToggle');
@@ -41,10 +41,8 @@ const wHost = window.location.hostname;
 const wPort = window.location.port;
 
 
-const buf = new Array();
 const states = {};
 states.running = 0;
-states.commit = 0;
 
 const handles = {};
 handles.contTimeout = null;
@@ -64,18 +62,11 @@ function appInit() {
     aAudioComp.src = aAudioComp.ctx.createMediaStreamSource(stream);
     aAudioComp.recorder = new MediaRecorder(stream, MEDIARECORDER_OPTIONS);
     aAudioComp.recorder.ondataavailable = (e)=>{
-      buf.push(e.data);
-      if (states.commit === 1) {
-        states.commit = 0;
-        wxclStageAndTransmit().then((d)=>{
-          wxclRender(d);
-          buf.length = 0;
-        });
-      }
+      wxclStageAndTransmit(e.data).then((d)=>{
+        wxclRender(d);
+      });
     };
-    // aAudioComp.ctx.suspend();
-    aAudioComp.recorder.start()
-    aAudioComp.recorder.pause()
+    aAudioComp.ctx.suspend();
   })
   .catch((err)=>{
     appDestroy();
@@ -96,8 +87,7 @@ function appDestroy() {
 };
 
 
-async function wxclStageAndTransmit() {
-  const payload = new Blob(buf, {type:aAudioComp.recorder.mimeType})
+async function wxclStageAndTransmit(payload) {
   const formData = new FormData()
   formData.append('file', payload, 'file')
   formData.append('ts', new Date().getTime())
@@ -120,8 +110,8 @@ const insertCellOnRow = (row, ncol, str) => {
 }
 
 function wxclRender(data) {
-  data['trans'].forEach(trans => {
-    trans['segments'].forEach(seg => {
+  data?.trans?.forEach(trans => {
+    trans?.segments?.forEach(seg => {
       let row = elTableBody.insertRow(0)
       insertCellOnRow(row, 0, seg['ts'])
       insertCellOnRow(row, 1, trans['language'])
@@ -132,7 +122,7 @@ function wxclRender(data) {
 
 function wxclStartCont() {
   wxclStop();
-  setTimeout(wxclStart, 300);
+  setTimeout(wxclStart, 10);
   handles.contTimeout = setTimeout(wxclStartCont, RECORD_WINDOW);
 };
 
@@ -148,8 +138,8 @@ function wxclStart() {
   if (states.running === 1) return;
   states.running = 1;
   elBtnToggle.value = 'stop'
-  // aAudioComp.ctx.resume();
-  aAudioComp.recorder.resume()
+  aAudioComp.ctx.resume();
+  aAudioComp.recorder.start()
   // console.log('started')
 };
 
@@ -157,10 +147,8 @@ function wxclStop() {
   if (states.running === 0) return;
   states.running = 0;
   elBtnToggle.value = 'start'
-  states.commit = 1;
-  aAudioComp.recorder.pause();
-  aAudioComp.recorder.requestData();
-  // aAudioComp.ctx.suspend();
+  aAudioComp.recorder.stop();
+  aAudioComp.ctx.suspend();
   // console.log('stopped')
 };
 
