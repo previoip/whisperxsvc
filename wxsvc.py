@@ -69,3 +69,7 @@ def svc():
     logger.error(e)
   svc_lock.release()
   return json.dumps(resp)
+
+
+if __name__ == '__main__':
+  app.run(host='localhost', port=5000)
