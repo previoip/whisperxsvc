@@ -3,7 +3,8 @@ import json
 from os import makedirs, remove as rm
 from io import BytesIO
 from tempfile import mkstemp
-from time import time
+from datetime import datetime
+from threading import Lock
 from flask import Flask, request, render_template
 from whisperx import load_audio
 from wxloader import transcribe
@@ -11,9 +12,10 @@ from wxloader import transcribe
 
 CACHE_DIR = './cache/atemp'
 
-app = Flask(__name__)
 rc = 0
-logger = logging.getLogger()
+app = Flask(__name__)
+logger = logging.getLogger(__name__)
+svc_lock = Lock()
 makedirs(CACHE_DIR, exist_ok=True)
 
 
@@ -21,30 +23,43 @@ def incr(d):
   global rc
   rc += 1
   d['rc'] = rc
-  d['ts'] = time()
+
+
+def format_timerange(timestamp, start, end):
+  r = '['
+  r += datetime.fromtimestamp(timestamp/1000 + start).strftime("%H:%M:%S")
+  r += '-'
+  r += datetime.fromtimestamp(timestamp/1000 + end).strftime("%H:%M:%S")
+  r += ']'
+  return r
 
 
 @app.route('/')
 def root():
   return render_template('./home.html')
 
-
 @app.route('/api/trans/a', methods=['POST'])
 def svc():
+  svc_lock.acquire(blocking=True)
   resp = dict()
   incr(resp)
   file = request.files.get('file', None)
+  timestamp = float(request.form['ts'])
   if file is None:
-    logger.error('file recv is null')
+    logger.error('file is null')
     return {}
-
   fd, path = mkstemp(dir=CACHE_DIR)
-  with open(fd, 'wb') as fp:
-    fp.write(file.read())
-  audio = load_audio(path)
-  rm(path)
-  resp['trans'] = list()
-  resp['trans'].append(transcribe('ja', audio))
-  # resp['trans'].append(transcribe('en', audio))
-  print(resp['trans'])
+  with open(fd, 'wb') as fp: fp.write(file.read())
+  try:
+    audio = load_audio(path)
+    rm(path)
+    resp['trans'] = list()
+    resp['trans'].append(transcribe('ja', audio))
+    # resp['trans'].append(transcribe('en', audio))
+    for trans in resp['trans']:
+      for seg in trans['segments']:
+        seg['ts'] = format_timerange(timestamp, seg['start'], seg['end'])
+  except Exception as e:
+    logger.error(e)
+  svc_lock.release()
   return json.dumps(resp)

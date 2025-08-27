@@ -10,7 +10,7 @@ print('using device:', device)
 
 models = dict()
 models['ja'] = whisperx.load_model('base', device=device, compute_type=compute_type, language='ja', download_root='./cache')
-models['en'] = whisperx.load_model('base', device=device, compute_type=compute_type, language='en', download_root='./cache')
+# models['en'] = whisperx.load_model('base', device=device, compute_type=compute_type, language='en', download_root='./cache')
 
 # alinger_models = dict()
 # alinger_metadata = dict()
